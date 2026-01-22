@@ -2,237 +2,386 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản Lý Điểm Thi - qlylaodong-dev</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cờ Caro - Gomoku</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
-        h1 { text-align: center; color: #333; }
-        
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        
-        /* Form Styles */
-        .form-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; flex: 1; }
-        
-        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
-        
-        /* Nút chính (Xanh lá) */
-        button#mainBtn { background-color: #28a745; }
-        button#mainBtn:hover { background-color: #218838; }
-        
-        /* Nút hủy (Xám) - Mặc định ẩn */
-        button#cancelBtn { background-color: #6c757d; display: none; } 
-        button#cancelBtn:hover { background-color: #5a6268; }
+        :root {
+            --bg-color: #f0f2f5;
+            --board-bg: #eecfa1;
+            --line-color: #8b5a2b;
+            --x-color: #ef4444; /* Đỏ */
+            --o-color: #3b82f6; /* Xanh */
+            --text-color: #1f2937;
+            --highlight-win: #4ade80; /* Màu xanh lá khi thắng */
+            --cell-size: 32px; /* Kích thước ô mặc định */
+        }
 
-        /* Table Styles */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
-        tr:hover { background-color: #f1f1f1; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2rem;
+            color: #374151;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .status-bar {
+            background: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .current-player {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            text-align: center;
+            line-height: 24px;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+        }
         
-        /* Action Buttons */
-        .action-group { display: flex; gap: 5px; }
-        .edit-btn { background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
-        .edit-btn:hover { background-color: #e0a800; }
-        .delete-btn { background-color: #dc3545; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
-        .delete-btn:hover { background-color: #c82333; }
+        .player-x { background-color: var(--x-color); }
+        .player-o { background-color: var(--o-color); }
+
+        /* Board Container để cuộn trên màn hình nhỏ nếu cần */
+        .board-wrapper {
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            overflow: auto;
+            max-width: 100%;
+            max-height: 80vh;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(15, var(--cell-size));
+            grid-template-rows: repeat(15, var(--cell-size));
+            gap: 1px;
+            background-color: var(--line-color);
+            border: 2px solid var(--line-color);
+        }
+
+        .cell {
+            background-color: var(--board-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: calc(var(--cell-size) * 0.7);
+            font-weight: 900;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            position: relative;
+        }
+
+        .cell:hover {
+            background-color: #f7e4c6;
+        }
+
+        .cell.x { color: var(--x-color); }
+        .cell.o { color: var(--o-color); }
         
-        .loading { text-align: center; color: #666; font-style: italic; }
+        /* Animation khi đánh cờ */
+        .cell.x::after, .cell.o::after {
+            content: attr(data-symbol);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .cell.win {
+            background-color: var(--highlight-win) !important;
+            color: white !important;
+        }
+
+        /* Nút điều khiển */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-reset {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .btn-reset:hover { background-color: #2563eb; transform: translateY(-1px); }
+        .btn-reset:active { transform: translateY(0); }
+
+        /* Modal thông báo kết quả */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 100;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 90%;
+            width: 320px;
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal h2 {
+            margin-bottom: 10px;
+            color: var(--text-color);
+        }
+
+        .modal p {
+            margin-bottom: 20px;
+            color: #6b7280;
+        }
+
+        /* Responsive cho mobile */
+        @media (max-width: 500px) {
+            :root {
+                --cell-size: 28px; /* Giảm kích thước ô trên màn nhỏ */
+            }
+            h1 { font-size: 1.5rem; }
+            .board-wrapper {
+                padding: 5px;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <h1>Quản Lý Điểm Thi 🎓</h1>
+    <h1>Cờ Caro</h1>
 
-    <div class="card">
-        <h3 id="formTitle">Thêm môn học mới</h3>
-        <div class="form-group">
-            <input type="text" id="subjectInput" placeholder="Tên môn học (VD: Toán Cao Cấp)">
-            <input type="number" id="scoreInput" placeholder="Điểm số" step="0.1" max="10">
-            <button id="mainBtn">Lưu điểm</button>
-            <button id="cancelBtn">Hủy sửa</button>
+    <div class="status-bar">
+        <span>Lượt đi:</span>
+        <div id="turn-indicator" class="current-player player-x">X</div>
+        <span id="turn-text">Người chơi X</span>
+    </div>
+
+    <div class="board-wrapper">
+        <div id="board" class="board">
+            <!-- Grid generated by JS -->
         </div>
     </div>
 
-    <div class="card">
-        <h3>Bảng điểm của tôi</h3>
-        <table id="scoreTable">
-            <thead>
-                <tr>
-                    <th>Môn học</th>
-                    <th>Điểm</th>
-                    <th style="width: 150px;">Hành động</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                </tbody>
-        </table>
-        <p id="loadingMsg" class="loading">Đang tải dữ liệu từ Firebase...</p>
+    <div class="controls">
+        <button class="btn-reset" onclick="resetGame()">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Chơi lại
+        </button>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        // Import thêm updateDoc để sửa dữ liệu
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, updateDoc, doc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    <!-- Modal Kết quả -->
+    <div id="result-modal" class="modal-overlay">
+        <div class="modal">
+            <h2 id="winner-title">Người chơi X thắng!</h2>
+            <p>Trò chơi đã kết thúc.</p>
+            <button class="btn-reset" onclick="resetGame()" style="width: 100%; justify-content: center;">Chơi ván mới</button>
+        </div>
+    </div>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCET0_R6120tj389v5C62NhSLrBIk2CbIw",
-            authDomain: "qlylaodong-dev.firebaseapp.com",
-            projectId: "qlylaodong-dev",
-            storageBucket: "qlylaodong-dev.firebasestorage.app",
-            messagingSenderId: "789374516793",
-            appId: "1:789374516793:web:29fb38ad0913f8b62e17e8",
-            measurementId: "G-M2PJEBLMJF"
-        };
+    <script>
+        const BOARD_SIZE = 15;
+        let boardState = []; // Mảng 2 chiều lưu trạng thái: null, 'X', 'O'
+        let currentPlayer = 'X'; // X đi trước
+        let gameActive = true;
+        let moveCount = 0;
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const COLLECTION_NAME = "exam_scores";
+        const boardElement = document.getElementById('board');
+        const turnIndicator = document.getElementById('turn-indicator');
+        const turnText = document.getElementById('turn-text');
+        const modal = document.getElementById('result-modal');
+        const winnerTitle = document.getElementById('winner-title');
 
-        // BIẾN QUẢN LÝ TRẠNG THÁI SỬA
-        let isEditing = false;
-        let currentEditId = null;
+        // Âm thanh đơn giản (không bắt buộc, dùng AudioContext để tránh lỗi autoplay nếu muốn nâng cao)
+        // Ở đây ta chỉ dùng UI visual thuần túy.
 
-        // DOM Elements
-        const mainBtn = document.getElementById('mainBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const subjectInput = document.getElementById('subjectInput');
-        const scoreInput = document.getElementById('scoreInput');
-        const formTitle = document.getElementById('formTitle');
-        const tableBody = document.getElementById('tableBody');
-        const loadingMsg = document.getElementById('loadingMsg');
-
-        // 1. XỬ LÝ NÚT LƯU / CẬP NHẬT
-        mainBtn.addEventListener('click', async () => {
-            const subject = subjectInput.value;
-            const score = scoreInput.value;
-
-            if (!subject || !score) {
-                alert("Vui lòng nhập đầy đủ tên môn và điểm!");
-                return;
-            }
-
-            try {
-                if (isEditing) {
-                    // --- LOGIC SỬA (UPDATE) ---
-                    const docRef = doc(db, COLLECTION_NAME, currentEditId);
-                    await updateDoc(docRef, {
-                        subject: subject,
-                        score: parseFloat(score),
-                        // Không update createdAt để giữ nguyên vị trí sắp xếp
-                    });
-                    alert("Cập nhật thành công!");
-                    resetFormState(); // Quay về trạng thái thêm mới
-                } else {
-                    // --- LOGIC THÊM MỚI (CREATE) ---
-                    await addDoc(collection(db, COLLECTION_NAME), {
-                        subject: subject,
-                        score: parseFloat(score),
-                        createdAt: serverTimestamp()
-                    });
-                }
-                
-                // Xóa trắng ô input sau khi xong
-                subjectInput.value = '';
-                scoreInput.value = '';
-                subjectInput.focus();
-
-            } catch (e) {
-                console.error("Lỗi: ", e);
-                alert("Có lỗi xảy ra: " + e.message);
-            }
-        });
-
-        // 2. NÚT HỦY SỬA
-        cancelBtn.addEventListener('click', () => {
-            subjectInput.value = '';
-            scoreInput.value = '';
-            resetFormState();
-        });
-
-        function resetFormState() {
-            isEditing = false;
-            currentEditId = null;
-            mainBtn.innerText = "Lưu điểm";
-            mainBtn.style.backgroundColor = "#28a745"; // Về màu xanh lá
-            formTitle.innerText = "Thêm môn học mới";
-            cancelBtn.style.display = "none"; // Ẩn nút hủy
-        }
-
-        // 3. HIỂN THỊ DỮ LIỆU (READ)
-        const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
-
-        onSnapshot(q, (snapshot) => {
-            loadingMsg.style.display = 'none';
-            tableBody.innerHTML = '';
-
-            if (snapshot.empty) {
-                tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center">Chưa có dữ liệu</td></tr>';
-            }
-
-            snapshot.forEach((docSnap) => {
-                const data = docSnap.data();
-                const row = `
-                    <tr>
-                        <td><strong>${data.subject}</strong></td>
-                        <td>${data.score}</td>
-                        <td class="action-group">
-                            <button class="edit-btn" 
-                                data-id="${docSnap.id}" 
-                                data-subject="${data.subject}" 
-                                data-score="${data.score}">Sửa</button>
-                            <button class="delete-btn" data-id="${docSnap.id}">Xóa</button>
-                        </td>
-                    </tr>
-                `;
-                tableBody.innerHTML += row;
-            });
-
-            // Gán sự kiện cho các nút Sửa và Xóa
-            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', handleDelete));
-            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', handleEdit));
-        });
-
-        // 4. CHỨC NĂNG XỬ LÝ SỰ KIỆN NÚT SỬA
-        function handleEdit(e) {
-            // Lấy dữ liệu từ nút bấm
-            const id = e.target.getAttribute('data-id');
-            const subject = e.target.getAttribute('data-subject');
-            const score = e.target.getAttribute('data-score');
-
-            // Đưa dữ liệu lên form
-            subjectInput.value = subject;
-            scoreInput.value = score;
-
-            // Chuyển sang trạng thái sửa
-            isEditing = true;
-            currentEditId = id;
-
-            // Đổi giao diện
-            formTitle.innerText = "Đang sửa: " + subject;
-            mainBtn.innerText = "Cập nhật";
-            mainBtn.style.backgroundColor = "#ffc107"; // Màu vàng cảnh báo
-            mainBtn.style.color = "#333";
-            cancelBtn.style.display = "inline-block"; // Hiện nút hủy
+        function initGame() {
+            gameActive = true;
+            currentPlayer = 'X';
+            moveCount = 0;
+            boardState = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
             
-            // Cuộn lên đầu trang để người dùng thấy form
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+            // Reset UI
+            boardElement.innerHTML = '';
+            modal.classList.remove('active');
+            updateTurnIndicator();
 
-        // 5. CHỨC NĂNG XÓA
-        async function handleDelete(e) {
-            if(confirm('Bạn có chắc muốn xóa điểm môn này không?')) {
-                const id = e.target.getAttribute('data-id');
-                // Nếu đang sửa chính môn muốn xóa thì reset form trước
-                if (id === currentEditId) resetFormState();
-                
-                try {
-                    await deleteDoc(doc(db, COLLECTION_NAME, id));
-                } catch (e) {
-                    alert("Xóa thất bại: " + e.message);
+            // Tạo lưới
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.addEventListener('click', () => handleCellClick(r, c, cell));
+                    boardElement.appendChild(cell);
                 }
             }
         }
+
+        function handleCellClick(row, col, cellElement) {
+            // Kiểm tra nếu ô đã đánh hoặc game đã dừng
+            if (boardState[row][col] || !gameActive) return;
+
+            // Cập nhật logic
+            boardState[row][col] = currentPlayer;
+            moveCount++;
+
+            // Cập nhật giao diện
+            cellElement.classList.add(currentPlayer.toLowerCase());
+            cellElement.setAttribute('data-symbol', currentPlayer);
+
+            // Kiểm tra thắng
+            const winCells = checkWin(row, col);
+            if (winCells) {
+                gameActive = false;
+                highlightWin(winCells);
+                showWinner(`Người chơi ${currentPlayer} chiến thắng!`);
+            } else if (moveCount === BOARD_SIZE * BOARD_SIZE) {
+                gameActive = false;
+                showWinner("Hòa! Bàn cờ đã đầy.");
+            } else {
+                // Đổi lượt
+                currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                updateTurnIndicator();
+            }
+        }
+
+        function updateTurnIndicator() {
+            turnIndicator.className = `current-player player-${currentPlayer.toLowerCase()}`;
+            turnIndicator.textContent = currentPlayer;
+            turnText.textContent = `Người chơi ${currentPlayer}`;
+        }
+
+        function showWinner(message) {
+            winnerTitle.textContent = message;
+            // Delay một chút để người chơi nhìn thấy nước đi cuối
+            setTimeout(() => {
+                modal.classList.add('active');
+            }, 500);
+        }
+
+        function highlightWin(cells) {
+            cells.forEach(pos => {
+                const index = pos.r * BOARD_SIZE + pos.c;
+                const cell = boardElement.children[index];
+                cell.classList.add('win');
+            });
+        }
+
+        // Logic kiểm tra thắng (5 ô liên tiếp)
+        function checkWin(r, c) {
+            const directions = [
+                { dr: 0, dc: 1 },  // Ngang
+                { dr: 1, dc: 0 },  // Dọc
+                { dr: 1, dc: 1 },  // Chéo chính (\)
+                { dr: 1, dc: -1 }  // Chéo phụ (/)
+            ];
+
+            for (let { dr, dc } of directions) {
+                let cells = [{r, c}]; // Danh sách các ô thắng cuộc
+                
+                // Kiểm tra hướng dương
+                for (let i = 1; i < 5; i++) {
+                    const nr = r + i * dr;
+                    const nc = c + i * dc;
+                    if (isValid(nr, nc) && boardState[nr][nc] === currentPlayer) {
+                        cells.push({r: nr, c: nc});
+                    } else {
+                        break;
+                    }
+                }
+
+                // Kiểm tra hướng âm
+                for (let i = 1; i < 5; i++) {
+                    const nr = r - i * dr;
+                    const nc = c - i * dc;
+                    if (isValid(nr, nc) && boardState[nr][nc] === currentPlayer) {
+                        cells.push({r: nr, c: nc});
+                    } else {
+                        break;
+                    }
+                }
+
+                if (cells.length >= 5) {
+                    return cells;
+                }
+            }
+            return null;
+        }
+
+        function isValid(r, c) {
+            return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Bắt đầu game khi tải trang
+        initGame();
+
     </script>
 </body>
 </html>
