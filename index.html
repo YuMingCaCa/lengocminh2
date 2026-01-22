@@ -13,8 +13,16 @@
         /* Form Styles */
         .form-group { display: flex; gap: 10px; margin-bottom: 10px; }
         input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; flex: 1; }
-        button#addBtn { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        button#addBtn:hover { background-color: #218838; }
+        
+        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        
+        /* Nút chính (Xanh lá) */
+        button#mainBtn { background-color: #28a745; }
+        button#mainBtn:hover { background-color: #218838; }
+        
+        /* Nút hủy (Xám) - Mặc định ẩn */
+        button#cancelBtn { background-color: #6c757d; display: none; } 
+        button#cancelBtn:hover { background-color: #5a6268; }
 
         /* Table Styles */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -22,7 +30,11 @@
         th { background-color: #007bff; color: white; }
         tr:hover { background-color: #f1f1f1; }
         
-        .delete-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        /* Action Buttons */
+        .action-group { display: flex; gap: 5px; }
+        .edit-btn { background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+        .edit-btn:hover { background-color: #e0a800; }
+        .delete-btn { background-color: #dc3545; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
         .delete-btn:hover { background-color: #c82333; }
         
         .loading { text-align: center; color: #666; font-style: italic; }
@@ -33,11 +45,12 @@
     <h1>Quản Lý Điểm Thi 🎓</h1>
 
     <div class="card">
-        <h3>Thêm môn học mới</h3>
+        <h3 id="formTitle">Thêm môn học mới</h3>
         <div class="form-group">
             <input type="text" id="subjectInput" placeholder="Tên môn học (VD: Toán Cao Cấp)">
             <input type="number" id="scoreInput" placeholder="Điểm số" step="0.1" max="10">
-            <button id="addBtn">Lưu điểm</button>
+            <button id="mainBtn">Lưu điểm</button>
+            <button id="cancelBtn">Hủy sửa</button>
         </div>
     </div>
 
@@ -48,7 +61,7 @@
                 <tr>
                     <th>Môn học</th>
                     <th>Điểm</th>
-                    <th>Hành động</th>
+                    <th style="width: 150px;">Hành động</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -58,11 +71,10 @@
     </div>
 
     <script type="module">
-        // Import thư viện từ CDN (dùng cho file HTML chạy trực tiếp)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // Import thêm updateDoc để sửa dữ liệu
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, updateDoc, doc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // Cấu hình Firebase của bạn
         const firebaseConfig = {
             apiKey: "AIzaSyCET0_R6120tj389v5C62NhSLrBIk2CbIw",
             authDomain: "qlylaodong-dev.firebaseapp.com",
@@ -73,19 +85,25 @@
             measurementId: "G-M2PJEBLMJF"
         };
 
-        // Khởi tạo Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        
-        // Tên collection trong database
         const COLLECTION_NAME = "exam_scores";
 
-        // 1. CHỨC NĂNG THÊM ĐIỂM
-        const addBtn = document.getElementById('addBtn');
+        // BIẾN QUẢN LÝ TRẠNG THÁI SỬA
+        let isEditing = false;
+        let currentEditId = null;
+
+        // DOM Elements
+        const mainBtn = document.getElementById('mainBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
         const subjectInput = document.getElementById('subjectInput');
         const scoreInput = document.getElementById('scoreInput');
+        const formTitle = document.getElementById('formTitle');
+        const tableBody = document.getElementById('tableBody');
+        const loadingMsg = document.getElementById('loadingMsg');
 
-        addBtn.addEventListener('click', async () => {
+        // 1. XỬ LÝ NÚT LƯU / CẬP NHẬT
+        mainBtn.addEventListener('click', async () => {
             const subject = subjectInput.value;
             const score = scoreInput.value;
 
@@ -95,32 +113,58 @@
             }
 
             try {
-                await addDoc(collection(db, COLLECTION_NAME), {
-                    subject: subject,
-                    score: parseFloat(score),
-                    createdAt: serverTimestamp() // Lưu thời gian để sắp xếp
-                });
+                if (isEditing) {
+                    // --- LOGIC SỬA (UPDATE) ---
+                    const docRef = doc(db, COLLECTION_NAME, currentEditId);
+                    await updateDoc(docRef, {
+                        subject: subject,
+                        score: parseFloat(score),
+                        // Không update createdAt để giữ nguyên vị trí sắp xếp
+                    });
+                    alert("Cập nhật thành công!");
+                    resetFormState(); // Quay về trạng thái thêm mới
+                } else {
+                    // --- LOGIC THÊM MỚI (CREATE) ---
+                    await addDoc(collection(db, COLLECTION_NAME), {
+                        subject: subject,
+                        score: parseFloat(score),
+                        createdAt: serverTimestamp()
+                    });
+                }
                 
-                // Reset form
+                // Xóa trắng ô input sau khi xong
                 subjectInput.value = '';
                 scoreInput.value = '';
                 subjectInput.focus();
+
             } catch (e) {
-                console.error("Lỗi khi thêm điểm: ", e);
-                alert("Có lỗi xảy ra, hãy kiểm tra Console (F12) hoặc xem bạn đã bật Firestore chưa.");
+                console.error("Lỗi: ", e);
+                alert("Có lỗi xảy ra: " + e.message);
             }
         });
 
-        // 2. CHỨC NĂNG HIỂN THỊ VÀ TỰ ĐỘNG CẬP NHẬT (REAL-TIME)
-        const tableBody = document.getElementById('tableBody');
-        const loadingMsg = document.getElementById('loadingMsg');
+        // 2. NÚT HỦY SỬA
+        cancelBtn.addEventListener('click', () => {
+            subjectInput.value = '';
+            scoreInput.value = '';
+            resetFormState();
+        });
 
-        // Sắp xếp theo thời gian tạo mới nhất
+        function resetFormState() {
+            isEditing = false;
+            currentEditId = null;
+            mainBtn.innerText = "Lưu điểm";
+            mainBtn.style.backgroundColor = "#28a745"; // Về màu xanh lá
+            formTitle.innerText = "Thêm môn học mới";
+            cancelBtn.style.display = "none"; // Ẩn nút hủy
+        }
+
+        // 3. HIỂN THỊ DỮ LIỆU (READ)
         const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
 
         onSnapshot(q, (snapshot) => {
-            loadingMsg.style.display = 'none'; // Ẩn chữ đang tải
-            tableBody.innerHTML = ''; // Xóa bảng cũ để render lại
+            loadingMsg.style.display = 'none';
+            tableBody.innerHTML = '';
 
             if (snapshot.empty) {
                 tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center">Chưa có dữ liệu</td></tr>';
@@ -132,7 +176,11 @@
                     <tr>
                         <td><strong>${data.subject}</strong></td>
                         <td>${data.score}</td>
-                        <td>
+                        <td class="action-group">
+                            <button class="edit-btn" 
+                                data-id="${docSnap.id}" 
+                                data-subject="${data.subject}" 
+                                data-score="${data.score}">Sửa</button>
                             <button class="delete-btn" data-id="${docSnap.id}">Xóa</button>
                         </td>
                     </tr>
@@ -140,16 +188,44 @@
                 tableBody.innerHTML += row;
             });
 
-            // Gán sự kiện xóa cho các nút vừa tạo
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', handleDelete);
-            });
+            // Gán sự kiện cho các nút Sửa và Xóa
+            document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', handleDelete));
+            document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', handleEdit));
         });
 
-        // 3. CHỨC NĂNG XÓA
+        // 4. CHỨC NĂNG XỬ LÝ SỰ KIỆN NÚT SỬA
+        function handleEdit(e) {
+            // Lấy dữ liệu từ nút bấm
+            const id = e.target.getAttribute('data-id');
+            const subject = e.target.getAttribute('data-subject');
+            const score = e.target.getAttribute('data-score');
+
+            // Đưa dữ liệu lên form
+            subjectInput.value = subject;
+            scoreInput.value = score;
+
+            // Chuyển sang trạng thái sửa
+            isEditing = true;
+            currentEditId = id;
+
+            // Đổi giao diện
+            formTitle.innerText = "Đang sửa: " + subject;
+            mainBtn.innerText = "Cập nhật";
+            mainBtn.style.backgroundColor = "#ffc107"; // Màu vàng cảnh báo
+            mainBtn.style.color = "#333";
+            cancelBtn.style.display = "inline-block"; // Hiện nút hủy
+            
+            // Cuộn lên đầu trang để người dùng thấy form
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 5. CHỨC NĂNG XÓA
         async function handleDelete(e) {
             if(confirm('Bạn có chắc muốn xóa điểm môn này không?')) {
                 const id = e.target.getAttribute('data-id');
+                // Nếu đang sửa chính môn muốn xóa thì reset form trước
+                if (id === currentEditId) resetFormState();
+                
                 try {
                     await deleteDoc(doc(db, COLLECTION_NAME, id));
                 } catch (e) {
